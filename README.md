@@ -1,30 +1,24 @@
-# Sanchari — Simple Travel Planner
+# Sanchari â€” Worldwide Travel Planner
 
-Sanchari creates personalized day-by-day travel itineraries using live place data rather than a hard-coded destination list.
+Sanchari creates simple day-by-day itineraries from globally ranked destination data.
 
-## What it does
+## Data approach
 
-- Accepts any city, region, or country
-- Resolves the destination with OpenStreetMap Nominatim
-- Finds real nearby attractions through the OpenStreetMap Overpass API
-- Uses Wikipedia geosearch as a service fallback
-- Personalizes the order and daily schedule by interest, pace, budget, travelers, and comfort needs
-- Requires no API key or build step
+- OpenStreetMap Nominatim resolves the userâ€™s city and coordinates.
+- Wikidata finds nearby places and ranks them by the number of Wikimedia projects that reference each place. This provides a practical worldwide notability signal instead of returning arbitrary nearby map objects.
+- Results are limited to travel-relevant categories such as attractions, museums, parks, monuments, landmarks, religious sites, markets, beaches, and natural features.
+- OpenStreetMap search links provide map details for each itinerary stop.
+
+No API key or build step is required.
 
 ## Run locally
-
-From the project directory:
 
 ```powershell
 firebase.cmd emulators:start --only hosting
 ```
 
-Open `http://localhost:5000`.
-
-## Data attribution
-
-Location and attraction data is © OpenStreetMap contributors. The website includes visible attribution and direct links to source place pages.
+Open `http://localhost:5000` and enter a city plus country for the most precise result.
 
 ## Production note
 
-The public Nominatim and Overpass endpoints are appropriate for a lightweight demonstration. For high traffic, use a hosted geocoding provider or your own OpenStreetMap services and add server-side caching.
+For guaranteed commercial service levels, replace the public endpoints with a paid places provider such as Google Places, Foursquare, or Geoapify and proxy requests through a server-side endpoint.

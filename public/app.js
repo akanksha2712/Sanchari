@@ -1,9 +1,8 @@
-﻿(() => {
+(() => {
   "use strict";
 
   const $ = (selector, scope = document) => scope.querySelector(selector);
   const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
-
   const form = $("#planner");
   const destinationInput = $("#destination");
   const submitButton = $("#submit-button");
@@ -19,16 +18,15 @@
     adventure: "Active exploration"
   };
   const comfortNotes = {
-    mobility: "The schedule uses fewer stops per day and allows extra transfer time. Check step-free access directly with each venue before visiting.",
+    mobility: "The schedule uses fewer stops per day and allows extra transfer time. Confirm step-free access directly with each venue before visiting.",
     "low-energy": "A longer midday break is included. Keep one activity optional so the plan remains comfortable if energy levels change.",
     dietary: "Allow time to review menus and confirm ingredients. Save your dietary requirements in the local language before the trip."
   };
-
   const knownFallbacks = {
-    "new york": ["Central Park", "Statue of Liberty", "The Metropolitan Museum of Art", "Empire State Building", "Brooklyn Bridge", "Times Square", "The High Line", "Grand Central Terminal", "9/11 Memorial", "Museum of Modern Art", "Rockefeller Center", "One World Trade Center"],
-    "new york city": ["Central Park", "Statue of Liberty", "The Metropolitan Museum of Art", "Empire State Building", "Brooklyn Bridge", "Times Square", "The High Line", "Grand Central Terminal", "9/11 Memorial", "Museum of Modern Art", "Rockefeller Center", "One World Trade Center"],
-    paris: ["Eiffel Tower", "Louvre Museum", "Notre-Dame de Paris", "Montmartre", "Arc de Triomphe", "MusÃ©e d'Orsay", "Luxembourg Garden", "Sainte-Chapelle", "Palais Garnier"],
-    tokyo: ["Meiji Shrine", "SensÅ-ji", "Tokyo National Museum", "Shinjuku Gyo-en", "Tokyo Skytree", "Shibuya Crossing", "Imperial Palace", "Ueno Park", "Mori Art Museum"]
+    "new york": ["Statue of Liberty", "Empire State Building", "Central Park", "The Metropolitan Museum of Art", "Brooklyn Bridge", "One World Trade Center", "Times Square", "Museum of Modern Art", "Grand Central Terminal", "The High Line"],
+    "new york city": ["Statue of Liberty", "Empire State Building", "Central Park", "The Metropolitan Museum of Art", "Brooklyn Bridge", "One World Trade Center", "Times Square", "Museum of Modern Art", "Grand Central Terminal", "The High Line"],
+    paris: ["Eiffel Tower", "Louvre Museum", "Notre-Dame de Paris", "Arc de Triomphe", "MusÃ©e d'Orsay", "Montmartre", "Luxembourg Garden", "Sainte-Chapelle", "Palais Garnier"],
+    tokyo: ["SensÅ-ji", "Tokyo Skytree", "Meiji Shrine", "Tokyo National Museum", "Shinjuku Gyo-en", "Shibuya Crossing", "Imperial Palace", "Ueno Park", "Mori Art Museum"]
   };
 
   $$("[data-example]").forEach(button => button.addEventListener("click", () => {
@@ -46,7 +44,7 @@
     const query = destinationInput.value.trim().replace(/\s+/g, " ");
     if (query.length < 2) {
       destinationInput.classList.add("invalid");
-      setStatus("Enter a city, region, or country.", true);
+      setStatus("Enter a city and country, such as New York, USA.", true);
       destinationInput.focus();
       return;
     }
@@ -59,11 +57,13 @@
     try {
       setStatus(`Finding ${query}...`);
       const location = await searchDestination(query);
-      setStatus(`Finding real places near ${location.shortName}...`);
-      const places = await findPlaces(location, query);
-
+      if (["country", "state"].includes(location.addressType)) {
+        throw new Error("Please enter a city or specific destination, not an entire country or state.");
+      }
+      setStatus(`Ranking well-known places near ${location.shortName}...`);
+      const places = await findRelevantPlaces(location, query);
       if (places.length < 4) {
-        throw new Error("Not enough named attractions were found for this destination. Try a nearby city or a more specific destination name.");
+        throw new Error("Not enough well-known places were found. Try adding the country or choosing a nearby major city.");
       }
 
       const preferences = {
@@ -75,13 +75,12 @@
         budget: Number($("#budget").value),
         comfort: $("#comfort").value
       };
-
       renderItinerary({ location, places, preferences });
       setStatus("");
       results.hidden = false;
       results.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (error) {
-      setStatus(error.message || "Place data is temporarily unavailable. Please try again.", true);
+      setStatus(error.message || "The destination service is temporarily unavailable. Please try again.", true);
     } finally {
       submitButton.disabled = false;
       submitButton.textContent = "Create my itinerary";
@@ -98,99 +97,113 @@
       "accept-language": "en"
     });
     const data = await fetchJson(`https://nominatim.openstreetmap.org/search?${params}`);
-    if (!Array.isArray(data) || !data.length) {
-      throw new Error(`We could not find â€œ${query}â€. Try adding the state or country.`);
-    }
+    if (!Array.isArray(data) || !data.length) throw new Error(`We could not find â€œ${query}â€. Try adding the country.`);
     const match = data[0];
     const address = match.address || {};
-    const shortName = address.city || address.town || address.village || address.state || match.namedetails?.name || query;
+    const shortName = address.city || address.town || address.village || address.municipality || address.state || match.namedetails?.name || query;
     return {
       shortName,
       displayName: match.display_name,
+      addressType: match.addresstype || match.type,
       lat: Number(match.lat),
       lon: Number(match.lon)
     };
   }
 
-  async function findPlaces(location, originalQuery) {
-    const radius = 15000;
-    const query = `[out:json][timeout:25];(` +
-      `nwr["tourism"~"attraction|museum|gallery|viewpoint"]["name"](around:${radius},${location.lat},${location.lon});` +
-      `nwr["historic"~"monument|memorial|castle|archaeological_site"]["name"](around:${radius},${location.lat},${location.lon});` +
-      `nwr["leisure"="park"]["name"](around:${radius},${location.lat},${location.lon});` +
-      `);out center tags 300;`;
-
-    let apiPlaces = [];
+  async function findRelevantPlaces(location, originalQuery) {
+    let places = [];
     try {
-      const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-      const response = await fetchJson(overpassUrl, 28000);
-      apiPlaces = (response.elements || []).map(normalizeOsmPlace).filter(Boolean);
+      places = await fetchRankedWikidataPlaces(location);
     } catch {
-      apiPlaces = await findWikipediaPlaces(location);
+      places = [];
     }
 
     const fallbackKey = originalQuery.toLowerCase().replace(/,.*$/, "").trim();
-    const fallback = (knownFallbacks[fallbackKey] || []).map((name, index) => ({
-      name,
-      type: "Popular place",
-      score: 100 - index,
-      url: `https://www.openstreetmap.org/search?query=${encodeURIComponent(`${name}, ${location.shortName}`)}`
-    }));
+    if (places.length < 8 && knownFallbacks[fallbackKey]) {
+      const fallbacks = knownFallbacks[fallbackKey].map((name, index) => ({
+        name,
+        type: "Major attraction",
+        score: 100 - index,
+        url: osmSearchUrl(name, location)
+      }));
+      places = [...places, ...fallbacks];
+    }
 
-    return deduplicatePlaces([...apiPlaces, ...fallback])
+    return deduplicatePlaces(places)
       .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
-      .slice(0, 30);
+      .slice(0, 35);
   }
 
-  function normalizeOsmPlace(element) {
-    const tags = element.tags || {};
-    const name = cleanName(tags.name);
-    if (!name || /playground|school|daycare|parking|apartment|cemetery|triangle$/i.test(name)) return null;
+  async function fetchRankedWikidataPlaces(location) {
+    const radius = 18;
+    const sparql = `
+      SELECT ?item ?itemLabel ?sitelinks (GROUP_CONCAT(DISTINCT ?instanceLabel; separator="|") AS ?types) WHERE {
+        SERVICE wikibase:around {
+          ?item wdt:P625 ?location .
+          bd:serviceParam wikibase:center "Point(${location.lon} ${location.lat})"^^geo:wktLiteral .
+          bd:serviceParam wikibase:radius "${radius}" .
+        }
+        ?item wikibase:sitelinks ?sitelinks ; wdt:P18 ?image ; wdt:P31 ?instance .
+        FILTER(?sitelinks >= 3)
+        SERVICE wikibase:label {
+          bd:serviceParam wikibase:language "en".
+          ?item rdfs:label ?itemLabel.
+          ?instance rdfs:label ?instanceLabel.
+        }
+      }
+      GROUP BY ?item ?itemLabel ?sitelinks
+      ORDER BY DESC(?sitelinks)
+      LIMIT 120`;
+    const params = new URLSearchParams({ format: "json", query: sparql });
+    const response = await fetchJson(`https://query.wikidata.org/sparql?${params}`, 25000);
+    return (response.results?.bindings || []).map(binding => normalizeWikidataPlace(binding, location)).filter(Boolean);
+  }
 
-    let score = 0;
-    if (tags.wikipedia) score += 15;
-    if (tags.wikidata) score += 10;
-    if (tags.website || tags["contact:website"]) score += 2;
-    if (tags.tourism === "museum") score += 11;
-    if (tags.tourism === "attraction") score += 9;
-    if (tags.tourism === "gallery") score += 8;
-    if (tags.tourism === "viewpoint") score += 7;
-    if (tags.historic === "castle" || tags.historic === "monument") score += 9;
-    if (tags.historic === "memorial") score += 5;
-    if (tags.leisure === "park") score += 5;
-
+  function normalizeWikidataPlace(binding, location) {
+    const name = cleanName(binding.itemLabel?.value);
+    const types = cleanName(binding.types?.value).toLowerCase();
+    const sitelinks = Number(binding.sitelinks?.value || 0);
+    if (!name || /^Q\d+$/.test(name) || !isTravelRelevant(types)) return null;
     return {
       name,
-      type: placeType(tags),
-      score,
-      url: `https://www.openstreetmap.org/${element.type}/${element.id}`,
-      tags
+      type: displayType(types),
+      score: sitelinks + relevanceBonus(types),
+      url: osmSearchUrl(name, location),
+      types
     };
   }
 
-  async function findWikipediaPlaces(location) {
-    try {
-      const params = new URLSearchParams({
-        action: "query",
-        list: "geosearch",
-        gscoord: `${location.lat}|${location.lon}`,
-        gsradius: "10000",
-        gslimit: "50",
-        format: "json",
-        origin: "*"
-      });
-      const response = await fetchJson(`https://en.wikipedia.org/w/api.php?${params}`);
-      return (response.query?.geosearch || [])
-        .filter(item => !/climate|history of|list of|election|smog|police|station \(|building$/i.test(item.title))
-        .map((item, index) => ({
-          name: cleanName(item.title),
-          type: "Nearby landmark",
-          score: Math.max(1, 10 - index * .1),
-          url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replaceAll(" ", "_"))}`
-        }));
-    } catch {
-      return [];
-    }
+  function isTravelRelevant(types) {
+    const excluded = /constructed language|human|company|organization|university|school|library|protest|riot|historical event|historical country|former country|sovereign state|sultanate|empire|dynasty|kingdom|stock exchange|rapid transit|administrative territorial|municipality|city in |county seat|borough of|village of|political party|hospital|geographic region/;
+    if (excluded.test(types)) return false;
+    return /tourist attraction|museum|gallery|park|garden|monument|memorial|bridge|skyscraper|tower|palace|castle|fort|archaeological|historic site|historic district|heritage site|historic building|square|street|market|temple|church|cathedral|mosque|synagogue|shrine|theatre|opera house|stadium|zoo|aquarium|island|beach|waterfall|mountain|volcano|nature reserve|national park|observation|arts district|world heritage|landmark/ .test(types);
+  }
+
+  function relevanceBonus(types) {
+    let bonus = 0;
+    if (types.includes("tourist attraction")) bonus += 120;
+    if (types.includes("world heritage")) bonus += 100;
+    if (/museum|gallery/.test(types)) bonus += 45;
+    if (/archaeological|monument|memorial/.test(types)) bonus += 40;
+    if (/palace|castle|temple|church|cathedral|mosque|synagogue|shrine/.test(types)) bonus += 35;
+    if (/park|garden|beach|nature reserve|national park|waterfall|mountain|volcano/.test(types)) bonus += 30;
+    if (/market|square|arts district|zoo|aquarium/.test(types)) bonus += 20;
+    return bonus;
+  }
+  function displayType(types) {
+    const labels = [
+      ["museum", "Museum"], ["gallery", "Gallery"], ["national park", "National park"], ["urban park", "Park"], ["park", "Park"],
+      ["palace", "Palace"], ["castle", "Castle"], ["archaeological", "Historic site"], ["historic", "Historic site"], ["memorial", "Memorial"],
+      ["monument", "Monument"], ["cathedral", "Religious landmark"], ["church", "Religious landmark"], ["mosque", "Religious landmark"],
+      ["temple", "Religious landmark"], ["shrine", "Religious landmark"], ["bridge", "Landmark"], ["skyscraper", "Landmark"],
+      ["tower", "Landmark"], ["square", "Public square"], ["market", "Market"], ["beach", "Beach"], ["island", "Island"],
+      ["mountain", "Natural landmark"], ["waterfall", "Natural landmark"], ["stadium", "Stadium"], ["zoo", "Zoo"], ["aquarium", "Aquarium"]
+    ];
+    return labels.find(([match]) => types.includes(match))?.[1] || "Major attraction";
+  }
+
+  function osmSearchUrl(name, location) {
+    return `https://www.openstreetmap.org/search?query=${encodeURIComponent(`${name}, ${location.shortName}`)}`;
   }
 
   function deduplicatePlaces(places) {
@@ -203,45 +216,28 @@
     });
   }
 
-  function placeType(tags) {
-    if (tags.tourism === "museum") return "Museum";
-    if (tags.tourism === "gallery") return "Gallery";
-    if (tags.tourism === "viewpoint") return "Viewpoint";
-    if (tags.leisure === "park") return "Park";
-    if (tags.historic === "castle") return "Historic site";
-    if (tags.historic === "monument") return "Monument";
-    if (tags.historic === "memorial") return "Memorial";
-    return "Attraction";
-  }
-
   function renderItinerary({ location, places, preferences }) {
     const orderedPlaces = orderByInterest(places, preferences.interest);
     const activityCount = preferences.pace === "relaxed" ? 2 : preferences.pace === "active" ? 4 : 3;
-    const requiredCount = preferences.days * activityCount;
-    const selectedPlaces = cyclePlaces(orderedPlaces, requiredCount);
+    const selectedPlaces = cyclePlaces(orderedPlaces, preferences.days * activityCount);
 
     $("#result-title").textContent = `${preferences.days} days in ${location.shortName}`;
     $("#result-location").textContent = location.displayName;
-
-    const summary = $("#summary-grid");
-    summary.replaceChildren(
+    $("#summary-grid").replaceChildren(
       summaryItem("Duration", `${preferences.days} days`),
       summaryItem("Travelers", String(preferences.travelers)),
       summaryItem("Focus", interestLabels[preferences.interest]),
       summaryItem("Pace", paceLabels[preferences.pace])
     );
 
-    const dayList = $("#day-list");
-    const days = [];
+    const dayCards = [];
     for (let day = 0; day < preferences.days; day += 1) {
       const start = day * activityCount;
-      const dayPlaces = selectedPlaces.slice(start, start + activityCount);
-      days.push(dayCard(day + 1, dayPlaces, preferences));
+      dayCards.push(dayCard(day + 1, selectedPlaces.slice(start, start + activityCount), preferences));
     }
-    dayList.replaceChildren(...days);
+    $("#day-list").replaceChildren(...dayCards);
 
-    const placeList = $("#place-list");
-    placeList.replaceChildren(...orderedPlaces.slice(0, 10).map(place => {
+    $("#place-list").replaceChildren(...orderedPlaces.slice(0, 12).map(place => {
       const item = create("li");
       const link = create("a", "", place.name);
       link.href = place.url;
@@ -254,11 +250,9 @@
     const totalBudget = preferences.budget * preferences.days * preferences.travelers;
     $("#budget-total").textContent = formatCurrency(totalBudget);
     $("#budget-note").textContent = `Approximate total for ${preferences.travelers} ${preferences.travelers === 1 ? "traveler" : "travelers"}, excluding flights.`;
-
     const comfortCard = $("#comfort-card");
-    if (preferences.comfort === "none") {
-      comfortCard.hidden = true;
-    } else {
+    if (preferences.comfort === "none") comfortCard.hidden = true;
+    else {
       $("#comfort-note").textContent = comfortNotes[preferences.comfort];
       comfortCard.hidden = false;
     }
@@ -271,10 +265,10 @@
   function interestScore(place, interest) {
     const type = place.type.toLowerCase();
     let boost = 0;
-    if (interest === "culture" && /museum|gallery|historic|monument|memorial/.test(type)) boost = 20;
-    if (interest === "nature" && /park|viewpoint/.test(type)) boost = 20;
-    if (interest === "adventure" && /park|viewpoint|attraction/.test(type)) boost = 12;
-    if (interest === "food" && /park|attraction/.test(type)) boost = 5;
+    if (interest === "culture" && /museum|gallery|historic|monument|memorial|religious|palace|castle/.test(type)) boost = 35;
+    if (interest === "nature" && /park|garden|beach|island|natural|zoo/.test(type)) boost = 35;
+    if (interest === "adventure" && /park|beach|island|natural|tower|landmark/.test(type)) boost = 20;
+    if (interest === "food" && /market|public square|street/.test(type)) boost = 35;
     return place.score + boost;
   }
 
@@ -288,21 +282,19 @@
     const card = create("article", "day-card");
     const header = create("div", "day-header");
     const copy = create("div");
-    copy.append(create("h3", "", dayTitle(dayNumber, preferences.interest)), create("p", "", `${places.length} planned stops with time between them`));
+    copy.append(create("h3", "", dayTitle(dayNumber, preferences.interest)), create("p", "", `${places.length} well-known places with time between them`));
     header.append(create("span", "", String(dayNumber).padStart(2, "0")), copy);
-
     const list = create("ol", "activity-list");
     const times = preferences.pace === "relaxed" ? ["10:00", "15:30"] : preferences.pace === "active" ? ["08:30", "11:00", "14:30", "18:00"] : ["09:00", "13:00", "16:30"];
     places.forEach((place, index) => {
       const item = create("li", "activity");
       const details = create("div");
-      const link = create("a", "", "View place details");
+      const link = create("a", "", "View on map");
       link.href = place.url;
       link.target = "_blank";
       link.rel = "noopener";
       details.append(create("strong", "", place.name), create("p", "", activityDescription(place, preferences, index)), link);
-      const time = create("time", "", times[index]);
-      item.append(time, details);
+      item.append(create("time", "", times[index]), details);
       list.append(item);
     });
     card.append(header, list);
@@ -311,23 +303,22 @@
 
   function activityDescription(place, preferences, index) {
     const type = place.type.toLowerCase();
-    if (preferences.interest === "food" && index === 1) return `Explore ${place.name}, then choose a well-reviewed local lunch nearby.`;
-    if (/museum|gallery/.test(type)) return `Allow two to three hours for this ${place.type.toLowerCase()} and check admission times before visiting.`;
-    if (/park|viewpoint/.test(type)) return `Enjoy this ${place.type.toLowerCase()} at an unhurried pace and keep the timing flexible for weather.`;
-    if (/historic|monument|memorial/.test(type)) return "Spend time with the siteâ€™s history and the surrounding area.";
-    return "Visit this well-known local place and leave time to explore the surrounding neighborhood.";
+    if (preferences.interest === "food" && index === 1) return `Explore ${place.name}, then choose a well-reviewed local meal nearby.`;
+    if (/museum|gallery/.test(type)) return `Allow two to three hours for this ${type} and check admission times before visiting.`;
+    if (/park|beach|natural|island/.test(type)) return `Enjoy this ${type} at an unhurried pace and keep the timing flexible for weather.`;
+    if (/historic|monument|memorial|religious|palace|castle/.test(type)) return "Spend time with the siteâ€™s history and the surrounding area.";
+    return "Visit this internationally recognized place and leave time to explore the surrounding area.";
   }
 
   function dayTitle(day, interest) {
-    if (day === 1) return "Arrival and essential places";
-    const titles = {
-      highlights: "More city highlights",
+    if (day === 1) return "Essential places";
+    return {
+      highlights: "More destination highlights",
       culture: "Culture and local history",
       nature: "Parks and open spaces",
       food: "Neighborhoods and local food",
-      adventure: "Active city exploration"
-    };
-    return titles[interest];
+      adventure: "Active exploration"
+    }[interest];
   }
 
   function summaryItem(label, value) {
@@ -341,29 +332,18 @@
     const timer = window.setTimeout(() => controller.abort(), timeout);
     try {
       const response = await fetch(url, { headers: { Accept: "application/json" }, signal: controller.signal });
-      if (!response.ok) throw new Error(`Place service returned ${response.status}`);
+      if (!response.ok) throw new Error(`Destination service returned ${response.status}`);
       return await response.json();
     } catch (error) {
-      if (error.name === "AbortError") throw new Error("The place service took too long to respond. Please try again.");
+      if (error.name === "AbortError") throw new Error("The destination service took too long. Please try again.");
       throw error;
     } finally {
       window.clearTimeout(timer);
     }
   }
 
-  function setStatus(message, isError = false) {
-    status.textContent = message;
-    status.classList.toggle("error", isError);
-  }
-
-  function create(tag, className = "", text = "") {
-    const element = document.createElement(tag);
-    if (className) element.className = className;
-    if (text) element.textContent = text;
-    return element;
-  }
-
+  function setStatus(message, isError = false) { status.textContent = message; status.classList.toggle("error", isError); }
+  function create(tag, className = "", text = "") { const element = document.createElement(tag); if (className) element.className = className; if (text) element.textContent = text; return element; }
   function cleanName(name) { return String(name || "").trim().replace(/\s+/g, " "); }
   function formatCurrency(value) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value); }
 })();
-

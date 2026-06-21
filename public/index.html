@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Create a simple, personalized travel itinerary using live destination and attraction data.">
   <meta name="theme-color" content="#173f3a">
-  <title>Sanchari — Simple travel planning</title>
+  <title>Sanchari â€” Simple travel planning</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
@@ -48,7 +48,7 @@
           <label class="field field-full">
             <span>Destination</span>
             <input id="destination" name="destination" type="text" placeholder="For example: New York" autocomplete="off" required>
-            <small>City, region, or country</small>
+            <small>City and country for best results</small>
           </label>
 
           <div class="example-row" aria-label="Example destinations">
@@ -77,7 +77,7 @@
             </label>
             <label class="field">
               <span>Daily budget</span>
-              <select id="budget" name="budget"><option value="75">Budget — up to $75</option><option value="150" selected>Comfort — around $150</option><option value="300">Premium — around $300</option></select>
+              <select id="budget" name="budget"><option value="75">Budget â€” up to $75</option><option value="150" selected>Comfort â€” around $150</option><option value="300">Premium â€” around $300</option></select>
             </label>
             <label class="field">
               <span>Comfort needs</span>
@@ -87,7 +87,7 @@
 
           <button class="primary-button" id="submit-button" type="submit">Create my itinerary</button>
           <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
-          <p class="data-note">Place information comes from live OpenStreetMap data. No API key is required.</p>
+          <p class="data-note">Places are ranked using live Wikidata and OpenStreetMap data. No API key is required.</p>
         </form>
       </div>
     </section>
@@ -154,7 +154,7 @@
   <footer>
     <div class="container footer-layout">
       <div><a class="brand" href="#top"><span class="brand-letter">S</span><span>Sanchari</span></a><p>Simple, personalized travel planning.</p></div>
-      <p>Location data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Search powered by Nominatim and Overpass.</p>
+      <p>Location data Â© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Search powered by Nominatim and Wikidata.</p>
     </div>
   </footer>
 
