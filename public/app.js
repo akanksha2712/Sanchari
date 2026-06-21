@@ -4,382 +4,356 @@
   const $ = (selector, scope = document) => scope.querySelector(selector);
   const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
 
-  const form = $("#trip-form");
+  const form = $("#planner");
   const destinationInput = $("#destination");
-  const dateInput = $("#start-date");
-  const itinerarySection = $("#itinerary");
-  const toast = $("#toast");
-  let currentPlan = null;
-  let toastTimer;
+  const submitButton = $("#submit-button");
+  const status = $("#form-status");
+  const results = $("#results");
 
-  const destinations = {
-    bali: {
-      label: "Bali",
-      region: "Indonesia",
-      themes: {
-        culture: ["Water temple and artisan village", "Ubud palace and evening dance", "Ancient gateways and local traditions"],
-        food: ["Market breakfast and spice tasting", "Family-run warung lunch", "Balinese cooking workshop"],
-        nature: ["Tegalalang rice terrace walk", "Waterfall and jungle viewpoint", "Sunrise among the volcanic hills"],
-        adventure: ["Ayung River rafting", "Mount Batur sunrise hike", "Coastal surf lesson"],
-        wellness: ["Garden yoga and sound healing", "Traditional flower bath", "Slow afternoon at a wellness retreat"],
-        nightlife: ["Seminyak sunset lounge", "Beachside music and night market", "Canggu cafÃ© hop after dark"]
-      },
-      food: "A relaxed dinner at a locally loved warung",
-      intro: "Settle into the island rhythm",
-      note: "Tropical heat can sneak up on you. Keep water close and leave a cool midday pause between outdoor stops."
-    },
-    tokyo: {
-      label: "Tokyo",
-      region: "Japan",
-      themes: {
-        culture: ["Meiji Shrine and Harajuku lanes", "Asakusa temple and old Tokyo walk", "Mori art museum and city views"],
-        food: ["Tsukiji outer market tasting", "Tiny ramen shop lunch", "Guided izakaya food walk"],
-        nature: ["Shinjuku Gyoen garden pause", "Riverside walk in Nakameguro", "Day trip toward Mount Takao"],
-        adventure: ["Cycling through hidden neighborhoods", "Indoor climbing with a city view", "Fast-paced Shibuya discovery walk"],
-        wellness: ["Quiet garden tea ritual", "Restorative sento visit", "Mindful morning in Yoyogi Park"],
-        nightlife: ["Shinjuku lantern alleys", "Shibuya rooftop evening", "Live music in Shimokitazawa"]
-      },
-      food: "Dinner at a neighborhood izakaya",
-      intro: "Ease into Tokyo one neighborhood at a time",
-      note: "Stations are large and days can become step-heavy. The plan groups nearby stops and protects a seated break each afternoon."
-    },
-    switzerland: {
-      label: "Switzerland",
-      region: "Swiss Alps",
-      themes: {
-        culture: ["Old-town lanes and local museum", "Mountain village heritage walk", "Lakeside castle and historic quarter"],
-        food: ["Alpine cheese tasting", "Village bakery breakfast", "Cozy fondue evening"],
-        nature: ["Panoramic train through the Alps", "Gentle turquoise-lake trail", "Cable-car ride to a high viewpoint"],
-        adventure: ["Guided ridge hike", "Paragliding above the valley", "Mountain bike discovery route"],
-        wellness: ["Thermal spa afternoon", "Slow forest bathing walk", "Sunrise stretch overlooking the peaks"],
-        nightlife: ["Lakeside wine bar", "Village music evening", "Starlit mountain terrace"]
-      },
-      food: "Seasonal dinner in a warm mountain inn",
-      intro: "Arrive, exhale, and let the scenery lead",
-      note: "Altitude and changeable weather deserve an easy first day. Layers, hydration, and flexible train timing are built into your plan."
-    },
-    dubai: {
-      label: "Dubai",
-      region: "United Arab Emirates",
-      themes: {
-        culture: ["Al Fahidi historic district", "Creek abra ride and spice souk", "Jumeirah mosque cultural visit"],
-        food: ["Emirati breakfast experience", "Old Dubai street-food trail", "Modern Middle Eastern tasting menu"],
-        nature: ["Desert conservation drive", "Sunrise at a quiet beach", "Hatta mountain day escape"],
-        adventure: ["Desert dune experience", "Skyline zipline", "Paddle session along the coast"],
-        wellness: ["Hammam and spa reset", "Sunrise beach yoga", "Poolside recovery afternoon"],
-        nightlife: ["Marina promenade after dark", "Downtown fountain evening", "Rooftop skyline lounge"]
-      },
-      food: "Dinner with a view of the evening skyline",
-      intro: "Meet the city beyond the skyline",
-      note: "Outdoor time is placed early or late to avoid peak heat, with air-conditioned transfers and indoor breaks during midday."
-    },
-    maldives: {
-      label: "Maldives",
-      region: "Indian Ocean",
-      themes: {
-        culture: ["Island community walk", "Local craft and storytelling hour", "MalÃ© heritage discovery"],
-        food: ["Maldivian breakfast by the sea", "Tuna and coconut cooking lesson", "Sunset beach dinner"],
-        nature: ["Lagoon snorkel with a guide", "Dolphin-spotting sail", "Sandbank picnic and reef walk"],
-        adventure: ["Guided open-water snorkel", "Kayak between quiet coves", "Beginner windsurf session"],
-        wellness: ["Oceanfront morning yoga", "Island spa ritual", "Barefoot digital-detox afternoon"],
-        nightlife: ["Starlit beach cinema", "Sunset music cruise", "Low-key island evening"]
-      },
-      food: "Fresh island dinner beside the water",
-      intro: "Step off the clock and into island time",
-      note: "Sun exposure and boat transfers are paced carefully. Reef-safe sunscreen, shade, and hydration are your daily essentials."
-    }
+  const paceLabels = { relaxed: "Relaxed", balanced: "Balanced", active: "Active" };
+  const interestLabels = {
+    highlights: "Top highlights",
+    culture: "Culture and history",
+    nature: "Parks and nature",
+    food: "Food and neighborhoods",
+    adventure: "Active exploration"
+  };
+  const comfortNotes = {
+    mobility: "The schedule uses fewer stops per day and allows extra transfer time. Check step-free access directly with each venue before visiting.",
+    "low-energy": "A longer midday break is included. Keep one activity optional so the plan remains comfortable if energy levels change.",
+    dietary: "Allow time to review menus and confirm ingredients. Save your dietary requirements in the local language before the trip."
   };
 
-  const generic = {
-    label: null,
-    region: "Your chosen destination",
-    themes: {
-      culture: ["Old-town orientation and landmark visit", "Independent gallery and heritage quarter", "Local craft workshop and cultural show"],
-      food: ["Market breakfast and local flavors", "Neighborhood food walk", "Cook-with-a-local experience"],
-      nature: ["Scenic morning walk", "Botanical garden and viewpoint", "Easy day trip into the landscape"],
-      adventure: ["Guided outdoor challenge", "Cycling beyond the main streets", "Signature active experience"],
-      wellness: ["Gentle yoga and slow breakfast", "Restorative spa break", "Mindful sunset walk"],
-      nightlife: ["Rooftop sunset stop", "Live local music", "Evening neighborhood discovery"]
-    },
-    food: "A locally recommended dinner",
-    intro: "Arrive gently and get your bearings",
-    note: "Keep water, essential medication, and a little unscheduled time close. A flexible plan is usually the most enjoyable one."
+  const knownFallbacks = {
+    "new york": ["Central Park", "Statue of Liberty", "The Metropolitan Museum of Art", "Empire State Building", "Brooklyn Bridge", "Times Square", "The High Line", "Grand Central Terminal", "9/11 Memorial", "Museum of Modern Art", "Rockefeller Center", "One World Trade Center"],
+    "new york city": ["Central Park", "Statue of Liberty", "The Metropolitan Museum of Art", "Empire State Building", "Brooklyn Bridge", "Times Square", "The High Line", "Grand Central Terminal", "9/11 Memorial", "Museum of Modern Art", "Rockefeller Center", "One World Trade Center"],
+    paris: ["Eiffel Tower", "Louvre Museum", "Notre-Dame de Paris", "Montmartre", "Arc de Triomphe", "MusÃ©e d'Orsay", "Luxembourg Garden", "Sainte-Chapelle", "Palais Garnier"],
+    tokyo: ["Meiji Shrine", "SensÅ-ji", "Tokyo National Museum", "Shinjuku Gyo-en", "Tokyo Skytree", "Shibuya Crossing", "Imperial Palace", "Ueno Park", "Mori Art Museum"]
   };
 
-  const wellbeingNotes = {
-    none: null,
-    mobility: "Your days favor step-free routes, shorter walking loops, direct transfers, and attractions where seating is readily available.",
-    "low-impact": "High-impact activities have been swapped for scenic, low-strain alternatives with generous recovery time.",
-    dietary: "Food stops include time to confirm ingredients and dietary requirements. Keep a translated dietary card available when helpful.",
-    medical: "Daily reminders, regular meals, and a protected rest window are built in. Keep medication in your hand luggage while moving between stays."
-  };
-
-  function toLocalDateString(date) {
-    const offset = date.getTimezoneOffset();
-    return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 10);
-  }
-
-  const today = new Date();
-  const defaultDate = new Date(today);
-  defaultDate.setDate(today.getDate() + 14);
-  dateInput.min = toLocalDateString(today);
-  dateInput.value = toLocalDateString(defaultDate);
-  $("#year").textContent = new Date().getFullYear();
-
-  $$("[data-scroll-planner]").forEach(button => button.addEventListener("click", () => {
-    $("#planner").scrollIntoView({ behavior: "smooth", block: "start" });
-    closeMenu();
-    window.setTimeout(() => destinationInput.focus(), 500);
+  $$("[data-example]").forEach(button => button.addEventListener("click", () => {
+    destinationInput.value = button.dataset.example;
+    destinationInput.focus();
   }));
 
-  const menuButton = $(".menu-button");
-  const nav = $("#site-nav");
-  menuButton.addEventListener("click", () => {
-    const open = !nav.classList.contains("open");
-    nav.classList.toggle("open", open);
-    menuButton.setAttribute("aria-expanded", String(open));
-    menuButton.setAttribute("aria-label", open ? "Close menu" : "Open menu");
-  });
-  $$("a", nav).forEach(link => link.addEventListener("click", closeMenu));
-  function closeMenu() {
-    nav.classList.remove("open");
-    menuButton.setAttribute("aria-expanded", "false");
-    menuButton.setAttribute("aria-label", "Open menu");
-  }
-
-  $$(".choice-chip").forEach(chip => chip.addEventListener("click", () => {
-    const selected = !chip.classList.contains("selected");
-    if (!selected && $$(".choice-chip.selected").length === 1) {
-      showToast("Keep at least one travel style selected.");
-      return;
-    }
-    chip.classList.toggle("selected", selected);
-    chip.setAttribute("aria-pressed", String(selected));
-  }));
-
-  $$(".destination-card").forEach(card => {
-    card.addEventListener("click", () => chooseDestination(card.dataset.destination));
-    card.addEventListener("keydown", event => {
-      if (event.key === "Enter" || event.key === " ") chooseDestination(card.dataset.destination);
-    });
-    card.tabIndex = 0;
+  $("#edit-plan").addEventListener("click", () => {
+    form.scrollIntoView({ behavior: "smooth", block: "center" });
+    destinationInput.focus();
   });
 
-  function chooseDestination(destination) {
-    destinationInput.value = destination;
-    $("#planner").scrollIntoView({ behavior: "smooth" });
-    window.setTimeout(() => dateInput.focus(), 450);
-  }
-
-  form.addEventListener("submit", event => {
+  form.addEventListener("submit", async event => {
     event.preventDefault();
-    if (!form.reportValidity()) return;
-
-    const rawName = destinationInput.value.trim().replace(/\s+/g, " ");
-    if (rawName.length < 2) {
-      destinationInput.setCustomValidity("Please enter a destination.");
-      destinationInput.reportValidity();
+    const query = destinationInput.value.trim().replace(/\s+/g, " ");
+    if (query.length < 2) {
+      destinationInput.classList.add("invalid");
+      setStatus("Enter a city, region, or country.", true);
+      destinationInput.focus();
       return;
     }
-    destinationInput.setCustomValidity("");
 
-    const key = Object.keys(destinations).find(name => rawName.toLowerCase().includes(name));
-    const profile = key ? destinations[key] : { ...generic, label: titleCase(rawName) };
-    const styles = $$(".choice-chip.selected").map(chip => chip.dataset.style);
-    const data = {
-      destination: profile.label,
-      profile,
-      days: Number($("#days").value),
-      startDate: dateInput.value,
-      budget: Number($("#budget").value),
-      travelers: Number($("#travelers").value),
-      pace: $("#pace").value,
-      wellbeing: $("#wellbeing-needs").value,
-      styles
-    };
-
-    const submitButton = $("button[type='submit']", form);
-    const original = submitButton.innerHTML;
+    destinationInput.classList.remove("invalid");
     submitButton.disabled = true;
-    submitButton.textContent = "Shaping your tripâ€¦";
-    window.setTimeout(() => {
-      currentPlan = buildPlan(data);
-      renderPlan(currentPlan);
+    submitButton.textContent = "Creating your itinerary...";
+    results.hidden = true;
+
+    try {
+      setStatus(`Finding ${query}...`);
+      const location = await searchDestination(query);
+      setStatus(`Finding real places near ${location.shortName}...`);
+      const places = await findPlaces(location, query);
+
+      if (places.length < 4) {
+        throw new Error("Not enough named attractions were found for this destination. Try a nearby city or a more specific destination name.");
+      }
+
+      const preferences = {
+        query,
+        days: Number($("#days").value),
+        travelers: Number($("#travelers").value),
+        interest: $("#interest").value,
+        pace: $("#pace").value,
+        budget: Number($("#budget").value),
+        comfort: $("#comfort").value
+      };
+
+      renderItinerary({ location, places, preferences });
+      setStatus("");
+      results.hidden = false;
+      results.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) {
+      setStatus(error.message || "Place data is temporarily unavailable. Please try again.", true);
+    } finally {
       submitButton.disabled = false;
-      submitButton.innerHTML = original;
-      itinerarySection.hidden = false;
-      itinerarySection.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 650);
+      submitButton.textContent = "Create my itinerary";
+    }
   });
 
-  function buildPlan(data) {
-    const { profile, styles, pace, days, destination } = data;
-    const activityCount = pace === "slow" ? 2 : pace === "full" ? 4 : 3;
-    const allChoices = styles.flatMap(style => profile.themes[style] || generic.themes[style]);
-    const fallbackChoices = Object.values(profile.themes).flat();
-    const choices = allChoices.length ? allChoices : fallbackChoices;
-    const dayPlans = [];
+  async function searchDestination(query) {
+    const params = new URLSearchParams({
+      q: query,
+      format: "jsonv2",
+      limit: "1",
+      addressdetails: "1",
+      namedetails: "1",
+      "accept-language": "en"
+    });
+    const data = await fetchJson(`https://nominatim.openstreetmap.org/search?${params}`);
+    if (!Array.isArray(data) || !data.length) {
+      throw new Error(`We could not find â€œ${query}â€. Try adding the state or country.`);
+    }
+    const match = data[0];
+    const address = match.address || {};
+    const shortName = address.city || address.town || address.village || address.state || match.namedetails?.name || query;
+    return {
+      shortName,
+      displayName: match.display_name,
+      lat: Number(match.lat),
+      lon: Number(match.lon)
+    };
+  }
 
-    for (let day = 0; day < days; day += 1) {
-      const date = new Date(`${data.startDate}T12:00:00`);
-      date.setDate(date.getDate() + day);
-      const activities = [];
-      if (day === 0) activities.push({ time: "11:00", title: profile.intro, detail: "Check in, reset, and explore the immediate neighborhood without rushing." });
-      const needed = activityCount - activities.length;
-      for (let i = 0; i < needed; i += 1) {
-        const choice = choices[(day * activityCount + i) % choices.length];
-        const times = pace === "slow" ? ["10:00", "16:30"] : pace === "full" ? ["08:30", "11:30", "15:00", "19:30"] : ["09:00", "14:00", "19:00"];
-        activities.push({
-          time: times[activities.length] || "18:30",
-          title: choice,
-          detail: activityDetail(styles[(day + i) % styles.length], data.wellbeing)
-        });
-      }
-      if (day > 0 && !activities.some(item => item.time.startsWith("19"))) {
-        activities[activities.length - 1] = { time: "19:00", title: profile.food, detail: "A flexible table choice close to your final daytime stop." };
-      }
-      dayPlans.push({
-        day: day + 1,
-        date: date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
-        title: dayTitle(day, days, styles),
-        activities
-      });
+  async function findPlaces(location, originalQuery) {
+    const radius = 15000;
+    const query = `[out:json][timeout:25];(` +
+      `nwr["tourism"~"attraction|museum|gallery|viewpoint"]["name"](around:${radius},${location.lat},${location.lon});` +
+      `nwr["historic"~"monument|memorial|castle|archaeological_site"]["name"](around:${radius},${location.lat},${location.lon});` +
+      `nwr["leisure"="park"]["name"](around:${radius},${location.lat},${location.lon});` +
+      `);out center tags 300;`;
+
+    let apiPlaces = [];
+    try {
+      const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+      const response = await fetchJson(overpassUrl, 28000);
+      apiPlaces = (response.elements || []).map(normalizeOsmPlace).filter(Boolean);
+    } catch {
+      apiPlaces = await findWikipediaPlaces(location);
     }
 
-    const targetSpend = Math.round(data.budget * data.travelers * Math.min(1, .62 + days * .035));
-    return { ...data, dayPlans, targetSpend };
+    const fallbackKey = originalQuery.toLowerCase().replace(/,.*$/, "").trim();
+    const fallback = (knownFallbacks[fallbackKey] || []).map((name, index) => ({
+      name,
+      type: "Popular place",
+      score: 100 - index,
+      url: `https://www.openstreetmap.org/search?query=${encodeURIComponent(`${name}, ${location.shortName}`)}`
+    }));
+
+    return deduplicatePlaces([...apiPlaces, ...fallback])
+      .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+      .slice(0, 30);
   }
 
-  function activityDetail(style, wellbeing) {
-    const detail = {
-      culture: "Time for the essential story, plus space to notice the details on your own.",
-      food: "A local favorite selected to fit naturally into the dayâ€™s route.",
-      nature: "Scenic time with weather flexibility and an unhurried photo stop.",
-      adventure: "A book-ahead experience with a gentler alternative close by.",
-      wellness: "Protected slow timeâ€”this is part of the plan, not an empty gap.",
-      nightlife: "An easy evening option with a simple route back to your stay."
-    }[style] || "A well-located experience with enough time to enjoy it.";
-    return wellbeing === "mobility" ? `${detail} Step-free access should be confirmed when booking.` : detail;
-  }
+  function normalizeOsmPlace(element) {
+    const tags = element.tags || {};
+    const name = cleanName(tags.name);
+    if (!name || /playground|school|daycare|parking|apartment|cemetery|triangle$/i.test(name)) return null;
 
-  function dayTitle(index, total, styles) {
-    if (index === 0) return "A gentle hello";
-    if (index === total - 1) return "One last lovely chapter";
-    const titles = {
-      culture: "Stories, streets & local character",
-      food: "Flavors worth slowing down for",
-      nature: "A wider, greener view",
-      adventure: "A little more alive",
-      wellness: "Breathe in, stretch out",
-      nightlife: "Golden hour to after dark"
+    let score = 0;
+    if (tags.wikipedia) score += 15;
+    if (tags.wikidata) score += 10;
+    if (tags.website || tags["contact:website"]) score += 2;
+    if (tags.tourism === "museum") score += 11;
+    if (tags.tourism === "attraction") score += 9;
+    if (tags.tourism === "gallery") score += 8;
+    if (tags.tourism === "viewpoint") score += 7;
+    if (tags.historic === "castle" || tags.historic === "monument") score += 9;
+    if (tags.historic === "memorial") score += 5;
+    if (tags.leisure === "park") score += 5;
+
+    return {
+      name,
+      type: placeType(tags),
+      score,
+      url: `https://www.openstreetmap.org/${element.type}/${element.id}`,
+      tags
     };
-    return titles[styles[index % styles.length]];
   }
 
-  function renderPlan(plan) {
-    $("#itinerary-title").textContent = `${plan.days} days in ${plan.destination}`;
-    $("#itinerary-subtitle").textContent = `${plan.profile.region} Â· ${paceLabel(plan.pace)} Â· shaped around ${listStyles(plan.styles)}`;
-    const start = new Date(`${plan.startDate}T12:00:00`);
-    const end = new Date(start);
-    end.setDate(start.getDate() + plan.days - 1);
+  async function findWikipediaPlaces(location) {
+    try {
+      const params = new URLSearchParams({
+        action: "query",
+        list: "geosearch",
+        gscoord: `${location.lat}|${location.lon}`,
+        gsradius: "10000",
+        gslimit: "50",
+        format: "json",
+        origin: "*"
+      });
+      const response = await fetchJson(`https://en.wikipedia.org/w/api.php?${params}`);
+      return (response.query?.geosearch || [])
+        .filter(item => !/climate|history of|list of|election|smog|police|station \(|building$/i.test(item.title))
+        .map((item, index) => ({
+          name: cleanName(item.title),
+          type: "Nearby landmark",
+          score: Math.max(1, 10 - index * .1),
+          url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replaceAll(" ", "_"))}`
+        }));
+    } catch {
+      return [];
+    }
+  }
 
-    const overview = $("#trip-overview");
-    overview.replaceChildren(
-      overviewItem("Dates", `${shortDate(start)} â€“ ${shortDate(end)}`),
-      overviewItem("Travelers", plan.travelers === 1 ? "Solo traveler" : `${plan.travelers} travelers`),
-      overviewItem("Trip rhythm", paceLabel(plan.pace)),
-      overviewItem("Top interests", listStyles(plan.styles))
+  function deduplicatePlaces(places) {
+    const seen = new Set();
+    return places.filter(place => {
+      const key = place.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function placeType(tags) {
+    if (tags.tourism === "museum") return "Museum";
+    if (tags.tourism === "gallery") return "Gallery";
+    if (tags.tourism === "viewpoint") return "Viewpoint";
+    if (tags.leisure === "park") return "Park";
+    if (tags.historic === "castle") return "Historic site";
+    if (tags.historic === "monument") return "Monument";
+    if (tags.historic === "memorial") return "Memorial";
+    return "Attraction";
+  }
+
+  function renderItinerary({ location, places, preferences }) {
+    const orderedPlaces = orderByInterest(places, preferences.interest);
+    const activityCount = preferences.pace === "relaxed" ? 2 : preferences.pace === "active" ? 4 : 3;
+    const requiredCount = preferences.days * activityCount;
+    const selectedPlaces = cyclePlaces(orderedPlaces, requiredCount);
+
+    $("#result-title").textContent = `${preferences.days} days in ${location.shortName}`;
+    $("#result-location").textContent = location.displayName;
+
+    const summary = $("#summary-grid");
+    summary.replaceChildren(
+      summaryItem("Duration", `${preferences.days} days`),
+      summaryItem("Travelers", String(preferences.travelers)),
+      summaryItem("Focus", interestLabels[preferences.interest]),
+      summaryItem("Pace", paceLabels[preferences.pace])
     );
 
     const dayList = $("#day-list");
-    dayList.replaceChildren(...plan.dayPlans.map(day => {
-      const card = create("article", "day-card");
-      const heading = create("div", "day-heading");
-      const number = create("span", "day-number", String(day.day).padStart(2, "0"));
-      const headingCopy = create("div");
-      const title = create("h3", "", day.title);
-      const date = create("p", "", day.date);
-      headingCopy.append(title, date);
-      heading.append(number, headingCopy);
-      const activities = create("div", "day-activities");
-      day.activities.forEach(item => {
-        const row = create("div", "activity");
-        const time = create("time", "", item.time);
-        const copy = create("div");
-        copy.append(create("strong", "", item.title), create("small", "", item.detail));
-        row.append(time, copy);
-        activities.append(row);
-      });
-      card.append(heading, activities);
-      return card;
+    const days = [];
+    for (let day = 0; day < preferences.days; day += 1) {
+      const start = day * activityCount;
+      const dayPlaces = selectedPlaces.slice(start, start + activityCount);
+      days.push(dayCard(day + 1, dayPlaces, preferences));
+    }
+    dayList.replaceChildren(...days);
+
+    const placeList = $("#place-list");
+    placeList.replaceChildren(...orderedPlaces.slice(0, 10).map(place => {
+      const item = create("li");
+      const link = create("a", "", place.name);
+      link.href = place.url;
+      link.target = "_blank";
+      link.rel = "noopener";
+      item.append(link, create("small", "", place.type));
+      return item;
     }));
 
-    $("#budget-total").textContent = money(plan.targetSpend);
-    const breakdown = [
-      ["Stay", 42], ["Food", 23], ["Experiences", 22], ["Local travel", 13]
-    ];
-    const budgetBars = $("#budget-bars");
-    budgetBars.replaceChildren(...breakdown.map(([label, percent]) => {
-      const row = create("div", "budget-row");
-      const track = create("div", "budget-track");
-      const fill = create("div", "budget-fill");
-      fill.style.width = `${percent}%`;
-      track.append(fill);
-      row.append(create("span", "", label), track, create("span", "", money(Math.round(plan.targetSpend * percent / 100))));
-      return row;
-    }));
+    const totalBudget = preferences.budget * preferences.days * preferences.travelers;
+    $("#budget-total").textContent = formatCurrency(totalBudget);
+    $("#budget-note").textContent = `Approximate total for ${preferences.travelers} ${preferences.travelers === 1 ? "traveler" : "travelers"}, excluding flights.`;
 
-    $("#care-note").textContent = wellbeingNotes[plan.wellbeing] || plan.profile.note;
-    $("#save-trip").textContent = "â™¡ Save this trip";
+    const comfortCard = $("#comfort-card");
+    if (preferences.comfort === "none") {
+      comfortCard.hidden = true;
+    } else {
+      $("#comfort-note").textContent = comfortNotes[preferences.comfort];
+      comfortCard.hidden = false;
+    }
   }
 
-  function overviewItem(label, value) {
-    const item = create("div", "overview-item");
-    item.append(create("small", "", label), create("strong", "", value));
+  function orderByInterest(places, interest) {
+    return [...places].sort((a, b) => interestScore(b, interest) - interestScore(a, interest) || b.score - a.score);
+  }
+
+  function interestScore(place, interest) {
+    const type = place.type.toLowerCase();
+    let boost = 0;
+    if (interest === "culture" && /museum|gallery|historic|monument|memorial/.test(type)) boost = 20;
+    if (interest === "nature" && /park|viewpoint/.test(type)) boost = 20;
+    if (interest === "adventure" && /park|viewpoint|attraction/.test(type)) boost = 12;
+    if (interest === "food" && /park|attraction/.test(type)) boost = 5;
+    return place.score + boost;
+  }
+
+  function cyclePlaces(places, count) {
+    const result = [];
+    for (let i = 0; i < count; i += 1) result.push(places[i % places.length]);
+    return result;
+  }
+
+  function dayCard(dayNumber, places, preferences) {
+    const card = create("article", "day-card");
+    const header = create("div", "day-header");
+    const copy = create("div");
+    copy.append(create("h3", "", dayTitle(dayNumber, preferences.interest)), create("p", "", `${places.length} planned stops with time between them`));
+    header.append(create("span", "", String(dayNumber).padStart(2, "0")), copy);
+
+    const list = create("ol", "activity-list");
+    const times = preferences.pace === "relaxed" ? ["10:00", "15:30"] : preferences.pace === "active" ? ["08:30", "11:00", "14:30", "18:00"] : ["09:00", "13:00", "16:30"];
+    places.forEach((place, index) => {
+      const item = create("li", "activity");
+      const details = create("div");
+      const link = create("a", "", "View place details");
+      link.href = place.url;
+      link.target = "_blank";
+      link.rel = "noopener";
+      details.append(create("strong", "", place.name), create("p", "", activityDescription(place, preferences, index)), link);
+      const time = create("time", "", times[index]);
+      item.append(time, details);
+      list.append(item);
+    });
+    card.append(header, list);
+    return card;
+  }
+
+  function activityDescription(place, preferences, index) {
+    const type = place.type.toLowerCase();
+    if (preferences.interest === "food" && index === 1) return `Explore ${place.name}, then choose a well-reviewed local lunch nearby.`;
+    if (/museum|gallery/.test(type)) return `Allow two to three hours for this ${place.type.toLowerCase()} and check admission times before visiting.`;
+    if (/park|viewpoint/.test(type)) return `Enjoy this ${place.type.toLowerCase()} at an unhurried pace and keep the timing flexible for weather.`;
+    if (/historic|monument|memorial/.test(type)) return "Spend time with the siteâ€™s history and the surrounding area.";
+    return "Visit this well-known local place and leave time to explore the surrounding neighborhood.";
+  }
+
+  function dayTitle(day, interest) {
+    if (day === 1) return "Arrival and essential places";
+    const titles = {
+      highlights: "More city highlights",
+      culture: "Culture and local history",
+      nature: "Parks and open spaces",
+      food: "Neighborhoods and local food",
+      adventure: "Active city exploration"
+    };
+    return titles[interest];
+  }
+
+  function summaryItem(label, value) {
+    const item = create("div", "summary-item");
+    item.append(create("span", "", label), create("strong", "", value));
     return item;
   }
 
-  $("#edit-trip").addEventListener("click", () => $("#planner").scrollIntoView({ behavior: "smooth" }));
-  $("#new-trip").addEventListener("click", () => {
-    destinationInput.value = "";
-    itinerarySection.hidden = true;
-    $("#planner").scrollIntoView({ behavior: "smooth" });
-    window.setTimeout(() => destinationInput.focus(), 450);
-  });
-
-  $("#save-trip").addEventListener("click", () => {
-    if (!currentPlan) return;
-    const saved = getSavedTrips();
-    const record = { ...currentPlan, savedAt: new Date().toISOString() };
-    saved.unshift(record);
-    localStorage.setItem("sanchari-trips", JSON.stringify(saved.slice(0, 8)));
-    updateSavedCount();
-    $("#save-trip").textContent = "â™¥ Trip saved";
-    showToast("Your itinerary is saved on this device.");
-  });
-
-  $("#footer-saved").addEventListener("click", () => {
-    const saved = getSavedTrips();
-    if (!saved.length) {
-      showToast("No saved trips yetâ€”your next one can live here.");
-      return;
+  async function fetchJson(url, timeout = 18000) {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), timeout);
+    try {
+      const response = await fetch(url, { headers: { Accept: "application/json" }, signal: controller.signal });
+      if (!response.ok) throw new Error(`Place service returned ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      if (error.name === "AbortError") throw new Error("The place service took too long to respond. Please try again.");
+      throw error;
+    } finally {
+      window.clearTimeout(timer);
     }
-    showToast(`${saved.length} saved ${saved.length === 1 ? "trip" : "trips"} on this device.`);
-  });
-
-  function getSavedTrips() {
-    try { return JSON.parse(localStorage.getItem("sanchari-trips")) || []; }
-    catch { return []; }
   }
 
-  function updateSavedCount() { $("#saved-count").textContent = getSavedTrips().length; }
-  updateSavedCount();
-
-  function showToast(message) {
-    window.clearTimeout(toastTimer);
-    toast.textContent = message;
-    toast.classList.add("show");
-    toastTimer = window.setTimeout(() => toast.classList.remove("show"), 2800);
+  function setStatus(message, isError = false) {
+    status.textContent = message;
+    status.classList.toggle("error", isError);
   }
 
   function create(tag, className = "", text = "") {
@@ -389,13 +363,7 @@
     return element;
   }
 
-  function shortDate(date) { return date.toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
-  function money(value) { return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value); }
-  function titleCase(value) { return value.replace(/\b\w/g, char => char.toUpperCase()); }
-  function paceLabel(value) { return ({ slow: "Slow & easy", balanced: "Balanced", full: "Full & lively" })[value]; }
-  function listStyles(styles) {
-    const labels = styles.slice(0, 3).map(titleCase);
-    return labels.length > 1 ? `${labels.slice(0, -1).join(", ")} & ${labels.at(-1)}` : labels[0];
-  }
+  function cleanName(name) { return String(name || "").trim().replace(/\s+/g, " "); }
+  function formatCurrency(value) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value); }
 })();
 
